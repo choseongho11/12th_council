@@ -2,19 +2,35 @@ let activeMembers = [];
 let isAdmin = false;
 
 const LS_KEY = 'councilMembersData_v1';
+const LS_VER_KEY = 'councilMembersData_version';
 
-// localStorage에 현재 의원 데이터 저장
+// localStorage에 현재 의원 데이터 저장 (버전 정보 함께 저장)
 function saveToLocalStorage() {
     try {
         localStorage.setItem(LS_KEY, JSON.stringify(activeMembers));
+        if (typeof MEMBERS_DATA_VERSION !== 'undefined') {
+            localStorage.setItem(LS_VER_KEY, MEMBERS_DATA_VERSION);
+        }
     } catch(err) {
         console.warn('localStorage 저장 실패:', err);
     }
 }
 
 // localStorage에서 의원 데이터 불러오기 (있으면 true 반환)
+// membersData.js의 버전이 다르면 localStorage 캐시를 무효화하고 false 반환
 function loadFromLocalStorage() {
     try {
+        const currentVer = typeof MEMBERS_DATA_VERSION !== 'undefined' ? MEMBERS_DATA_VERSION : null;
+        const savedVer = localStorage.getItem(LS_VER_KEY);
+
+        if (currentVer && savedVer !== currentVer) {
+            // 버전 불일치 → 캐시 삭제 후 membersData.js 우선 사용
+            console.info(`[데이터 업데이트] localStorage 버전(${savedVer}) → membersData.js 버전(${currentVer})으로 교체합니다.`);
+            localStorage.removeItem(LS_KEY);
+            localStorage.removeItem(LS_VER_KEY);
+            return false;
+        }
+
         const saved = localStorage.getItem(LS_KEY);
         if (saved) {
             const parsed = JSON.parse(saved);
@@ -59,6 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pw === 'admin1234') {
             if(confirm('정말로 전체 초기화를 진행하시겠습니까?\n업로드된 모든 데이터가 삭제되고 기본 내장 데이터로 돌아갑니다.')) {
                 localStorage.removeItem(LS_KEY);
+                localStorage.removeItem(LS_VER_KEY);
                 location.reload();
             }
         } else if (pw !== null) {
@@ -1217,8 +1234,9 @@ function saveCurrentEdits() {
 function exportToMembersDataJs() {
     if (!confirm('현재 화면의 모든 의원 데이터를 membersData.js 파일로 추출하시겠습니까?\n이 파일을 깃허브의 기존 파일과 교환하면 모든 사용자에게 동일한 데이터가 보입니다.')) return;
     
-    // membersData 변수 선언문 형식으로 직렬화
-    const content = `const membersData = ${JSON.stringify(activeMembers, null, 4)};`;
+    // membersData 변수 선언문 형식으로 직렬화 (버전 상수 포함)
+    const today = new Date().toISOString().slice(0, 10);
+    const content = `// ※ GitHub 배포 후 membersData.js가 반영되지 않을 경우, 아래 버전 값을 변경하세요.\n//   localStorage 캐시가 자동으로 무효화되고 이 파일의 데이터가 우선 적용됩니다.\nconst MEMBERS_DATA_VERSION = "${today}";\n\nconst membersData = ${JSON.stringify(activeMembers, null, 4)};`;
     
     const blob = new Blob([content], { type: 'text/javascript' });
     const url = URL.createObjectURL(blob);
