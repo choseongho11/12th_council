@@ -166,9 +166,16 @@ function closeModal() {
 // 상임위 활동 정렬 헬퍼: 회기 번호(숫자) 기준 내림차순
 function sortStandingComs(list) {
     if (!list || !Array.isArray(list)) return [];
+    const getSessionNum = (title) => {
+        const m = (title || "").match(/제\s*(\d+)\s*회/);
+        if (m) return parseInt(m[1]);
+        const ym = (title || "").match(/(20\d{2})/);
+        if (ym) return parseInt(ym[1]);
+        return parseInt(((title || "").match(/\d+/) || ["0"])[0]) || 0;
+    };
     return [...list].sort((a, b) => {
-        const numA = parseInt((a.title || "").match(/\d+/)) || 0;
-        const numB = parseInt((b.title || "").match(/\d+/)) || 0;
+        const numA = getSessionNum(a.title);
+        const numB = getSessionNum(b.title);
         return numB - numA; // 내림차순
     });
 }
@@ -539,8 +546,8 @@ function formatDate(raw) {
             if (cat === 'audit' || isAudit) {
                 titlePart = yearPart ? `${yearPart} 행정사무감사` : "행정사무감사";
             } else {
-                titlePart = yearPart ? `${yearPart} ${sessionClean}` : sessionClean;
-                if (!yearPart && !sessMatch && combinedText) {
+                titlePart = sessionClean;
+                if (!sessMatch && combinedText) {
                     titlePart = combinedText.length > 20 ? combinedText.substring(0, 20) + "..." : combinedText;
                 }
             }
