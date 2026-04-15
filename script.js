@@ -55,6 +55,47 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('excelUpload').addEventListener('change', handleExcelUpload);
     document.getElementById('downloadTemplateBtn').addEventListener('click', downloadExcelTemplate);
     document.getElementById('memberSelect').addEventListener('change', (e) => applyMemberData(e.target.value));
+
+    // 사진 업로드
+    document.getElementById('memberPhotoUpload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const memberId = document.getElementById('memberSelect').value;
+        if (!memberId) return alert('먼저 의원을 선택하세요.');
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            compressPhoto(ev.target.result, 240, 300, 0.65, (compressed) => {
+                const member = activeMembers.find(m => m.id === memberId);
+                if (member) {
+                    member.photo = compressed;
+                    try {
+                        saveToLocalStorage();
+                    } catch(e) {
+                        alert('저장 공간이 부족합니다. 일부 의원의 사진을 삭제 후 다시 시도하세요.');
+                        delete member.photo;
+                        showMemberPhoto(null);
+                        return;
+                    }
+                }
+                showMemberPhoto(compressed);
+            });
+        };
+        reader.onerror = () => alert('파일을 읽는 중 오류가 발생했습니다.');
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    });
+
+    // 사진 삭제
+    document.getElementById('memberPhotoDeleteBtn').addEventListener('click', () => {
+        const memberId = document.getElementById('memberSelect').value;
+        if (!memberId) return;
+        const member = activeMembers.find(m => m.id === memberId);
+        if (member) {
+            delete member.photo;
+            saveToLocalStorage();
+        }
+        showMemberPhoto(null);
+    });
     
     document.getElementById('memberSearch').addEventListener('input', (e) => {
         const term = e.target.value.trim().toLowerCase();
@@ -867,6 +908,44 @@ function renderDropdown() {
     });
 }
 
+// 이미지 압축: maxW×maxH 이내로 축소 후 JPEG quality로 인코딩, 결과를 callback(base64)으로 전달
+function compressPhoto(dataUrl, maxW, maxH, quality, callback) {
+    const image = new window.Image();
+    image.onload = function() {
+        let w = image.width;
+        let h = image.height;
+        const ratio = Math.min(maxW / w, maxH / h, 1);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(image, 0, 0, w, h);
+        callback(canvas.toDataURL('image/jpeg', quality));
+    };
+    image.onerror = function() {
+        callback(dataUrl); // 압축 실패 시 원본 사용
+    };
+    image.src = dataUrl;
+}
+
+function showMemberPhoto(src) {
+    const img = document.getElementById('memberPhoto');
+    const placeholder = document.getElementById('memberPhotoPlaceholder');
+    const deleteBtn = document.getElementById('memberPhotoDeleteBtn');
+    if (src) {
+        img.src = src;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+        deleteBtn.style.display = 'inline-block';
+    } else {
+        img.src = '';
+        img.style.display = 'none';
+        placeholder.style.display = 'block';
+        deleteBtn.style.display = 'none';
+    }
+}
+
 function applyMemberData(id) {
     const plenaryContainer = document.getElementById('plenaryActivities');
     const billContainer = document.getElementById('billActivities');
@@ -886,6 +965,15 @@ function applyMemberData(id) {
 
     const member = activeMembers.find(m => m.id === id);
     if (!member) return;
+
+    // 사진 로드 (member.photo 우선, 구버전 호환으로 localStorage 폴백)
+    const savedPhoto = member.photo || localStorage.getItem(`memberPhoto_${id}`) || null;
+    if (!member.photo && savedPhoto) {
+        member.photo = savedPhoto;
+        localStorage.removeItem(`memberPhoto_${id}`);
+        saveToLocalStorage();
+    }
+    showMemberPhoto(savedPhoto);
 
     // Fill Basic Text
     fields.forEach(f => { 
@@ -1242,8 +1330,8 @@ function exportToMembersDataJs() {
     if (!confirm('현재 화면의 모든 의원 데이터를 membersData.js 파일로 추출하시겠습니까?\n이 파일을 깃허브의 기존 파일과 교환하면 모든 사용자에게 동일한 데이터가 보입니다.')) return;
     
     // membersData 변수 선언문 형식으로 직렬화 (버전 상수 포함)
-    const today = new Date().toISOString().slice(0, 10);
-    const content = `// ※ GitHub 배포 후 membersData.js가 반영되지 않을 경우, 아래 버전 값을 변경하세요.\n//   localStorage 캐시가 자동으로 무효화되고 이 파일의 데이터가 우선 적용됩니다.\nconst MEMBERS_DATA_VERSION = "${today}";\n\nconst membersData = ${JSON.stringify(activeMembers, null, 4)};`;
+    const version = new Date().toISOString().slice(0, 19).replace('T', '_');
+    const content = `// ※ GitHub 배포 후 membersData.js가 반영되지 않을 경우, 아래 버전 값을 변경하세요.\n//   localStorage 캐시가 자동으로 무효화되고 이 파일의 데이터가 우선 적용됩니다.\nconst MEMBERS_DATA_VERSION = "${version}";\n\nconst membersData = ${JSON.stringify(activeMembers, null, 4)};`;
     
     const blob = new Blob([content], { type: 'text/javascript' });
     const url = URL.createObjectURL(blob);

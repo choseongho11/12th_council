@@ -188,14 +188,23 @@
                 </tbody>
             </table>
 
-            <table class="profile-table no-top-border">
-                <tbody>
-                    <tr><th>주 소</th><td id="td-address">천안시 동남구 청수14로</td></tr>
-                    <tr><th>학 력</th><td id="td-education">성균관대학교</td></tr>
-                    <tr><th>주요경력</th><td id="td-career">(전)천안시의회의원</td></tr>
-                    <tr><th>지역구</th><td id="td-region">천안시 제3선거구 문정동, 봉명동, 성정1동, 성정2동</td></tr>
-                </tbody>
-            </table>
+            <div class="profile-photo-wrap">
+                <table class="profile-table no-top-border">
+                    <tbody>
+                        <tr><th>주 소</th><td id="td-address">천안시 동남구 청수14로</td></tr>
+                        <tr><th>학 력</th><td id="td-education">성균관대학교</td></tr>
+                        <tr><th>주요경력</th><td id="td-career">(전)천안시의회의원</td></tr>
+                        <tr><th>지역구</th><td id="td-region">천안시 제3선거구 문정동, 봉명동, 성정1동, 성정2동</td></tr>
+                    </tbody>
+                </table>
+                <div class="photo-area" id="memberPhotoArea">
+                    <img id="memberPhoto" src="" alt="의원 사진" style="display:none;">
+                    <div id="memberPhotoPlaceholder">사진</div>
+                    <label for="memberPhotoUpload" class="photo-upload-btn admin-only no-print" title="사진 업로드">📷 업로드</label>
+                    <input type="file" id="memberPhotoUpload" accept="image/*" style="display:none;">
+                    <button class="photo-delete-btn admin-only no-print" id="memberPhotoDeleteBtn" style="display:none;">✕ 삭제</button>
+                </div>
+            </div>
 
              <table class="profile-table">
                 <tbody>
