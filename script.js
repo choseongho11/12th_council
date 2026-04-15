@@ -1210,3 +1210,25 @@ function saveCurrentEdits() {
     saveToLocalStorage();
     alert(`💾 '${member.name}' 의원의 변경사항이 성공적으로 저장되었습니다.\n(현재 브라우저 내에 유지되며, '데이터 양식 다운로드' 시 반영됩니다)`);
 }
+
+/**
+ * 현재 모든 의원 데이터를 membersData.js 형식으로 추출 (배포용)
+ */
+function exportToMembersDataJs() {
+    if (!confirm('현재 화면의 모든 의원 데이터를 membersData.js 파일로 추출하시겠습니까?\n이 파일을 깃허브의 기존 파일과 교환하면 모든 사용자에게 동일한 데이터가 보입니다.')) return;
+    
+    // membersData 변수 선언문 형식으로 직렬화
+    const content = `const membersData = ${JSON.stringify(activeMembers, null, 4)};`;
+    
+    const blob = new Blob([content], { type: 'text/javascript' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'membersData.js';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    alert('membersData.js 파일이 다운로드되었습니다.\n이 파일을 깃허브 저장소에 업로드하시면 동기화가 완료됩니다.');
+}

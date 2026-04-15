@@ -471,3 +471,21 @@ body.user-mode .session-title-edit {
     color: #ef4444;
     border-color: #fca5a5;
 }
+
+/* Danger Zone Mini Buttons */
+.btn-danger-small {
+    font-size: 10px;
+    padding: 3px 8px;
+    color: #999;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-danger-small:hover {
+    background: #fee2e2;
+    color: #ef4444;
+    border-color: #fca5a5;
+}
