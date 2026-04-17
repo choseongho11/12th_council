@@ -1,6 +1,22 @@
 let activeMembers = [];
 let isAdmin = false;
 
+// ===== 시스템 로그인 =====
+const SYSTEM_PASSWORD = 'a12345';
+
+function doLogin() {
+    const input = document.getElementById('loginPassword');
+    const errorEl = document.getElementById('loginError');
+    if (input.value === SYSTEM_PASSWORD) {
+        document.getElementById('loginScreen').classList.add('hidden');
+        input.value = '';
+        errorEl.textContent = '';
+    } else {
+        errorEl.textContent = '암호가 올바르지 않습니다.';
+        input.select();
+    }
+}
+
 const LS_KEY = 'councilMembersData_v1';
 const LS_VER_KEY = 'councilMembersData_version';
 
