@@ -1,6 +1,15 @@
 let activeMembers = [];
 let isAdmin = false;
 
+// 날짜 포맷 정규화: 2026-02-03 → 2026.02.03
+function formatDate(raw) {
+    if (!raw) return '';
+    const cleaned = raw.trim().replace(/-/g, '.');
+    return cleaned.replace(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/, (_, y, mo, d) =>
+        `${y}.${mo.padStart(2,'0')}.${d.padStart(2,'0')}`
+    );
+}
+
 // ===== 시스템 로그인 =====
 const SYSTEM_PASSWORD = 'a12345';
 
@@ -69,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderDropdown();
 
     document.getElementById('excelUpload').addEventListener('change', handleExcelUpload);
+    document.getElementById('txtUpload').addEventListener('change', handleTxtUpload);
     document.getElementById('downloadTemplateBtn').addEventListener('click', downloadExcelTemplate);
     document.getElementById('memberSelect').addEventListener('change', (e) => applyMemberData(e.target.value));
 
@@ -280,19 +290,6 @@ function generateBulkExcel() {
             });
         }
     });
-
-    // ------------------------------------------------------------------
-    // 날짜 포맷 정규화: 2026-02-03 → 2026.02.03
-    // ------------------------------------------------------------------
-    
-function formatDate(raw) {
-        if (!raw) return '';
-        const cleaned = raw.trim().replace(/-/g, '.');
-        // YYYY.M.D → YYYY.MM.DD 패딩
-        return cleaned.replace(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/, (_, y, mo, d) =>
-            `${y}.${mo.padStart(2,'0')}.${d.padStart(2,'0')}`
-        );
-    }
 
     // ------------------------------------------------------------------
     // 탭 구분 표 형식 파싱 (5분발언·도정질문·대표발의조례·건의안)
@@ -910,6 +907,118 @@ function handleExcelUpload(e) {
         e.target.value = '';
     };
     reader.readAsBinaryString(file);
+}
+
+// ----------------------------------------------------------------------------------
+// 속기록 TXT 파일 직접 업로드 (=== RECORD START === 형식)
+// ----------------------------------------------------------------------------------
+function handleTxtUpload(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const promises = files.map(file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => resolve(evt.target.result);
+        reader.onerror = reject;
+        reader.readAsText(file, 'utf-8');
+    }));
+
+    Promise.all(promises).then(contents => {
+        const fullText = contents.join('\n');
+        let addedCommittee = 0;
+        let addedAudit = 0;
+        const unmatched = new Set();
+
+        const blocks = fullText.split('=== RECORD START ===');
+        blocks.forEach(block => {
+            if (!block.trim()) return;
+
+            const metaMatch = block.match(/\[META\]([\s\S]*?)\[SUMMARY\]/);
+            const summaryMatch = block.match(/\[SUMMARY\]([\s\S]*?)(\[ORIGINAL\]|=== RECORD END ===|$)/);
+            if (!metaMatch || !summaryMatch) return;
+
+            const metaText = (metaMatch[1] || '').trim();
+
+            function getField(keyword) {
+                const regex = new RegExp(keyword + '\\s*[:：]\\s*(.*?)(?:\\r?\\n|$)', 'i');
+                const m = metaText.match(regex);
+                return m ? m[1].trim() : '';
+            }
+
+            let memberName = getField('의원명') || getField('성명') || getField('의원');
+            const session     = getField('회기');
+            const meetingName = getField('회의명');
+            const dateRaw     = getField('일자') || getField('날짜');
+            const summary     = summaryMatch[1].trim();
+
+            if (!memberName) return;
+            memberName = memberName.replace(/\s*의원$/, '').trim();
+
+            const matched = activeMembers.find(m => m.name === memberName);
+            if (!matched) { unmatched.add(memberName); return; }
+
+            const datePart   = formatDate(dateRaw.trim());
+            const bodyContent = datePart ? `[${datePart}] ${summary}` : summary;
+            const combinedText = (session + ' ' + meetingName).trim();
+
+            // 연도 추출
+            const yearMatch = combinedText.match(/(20\d{2})\s*년/);
+            let yearPart = yearMatch ? yearMatch[1] + '년' : '';
+            if (!yearPart && datePart && datePart.startsWith('20')) yearPart = datePart.substring(0, 4) + '년';
+
+            // 회기 번호 추출
+            const sessMatch  = combinedText.match(/제\s*(\d+)\s*회/);
+            const sessionNum = sessMatch ? sessMatch[1] : (combinedText.match(/\d+/) || [''])[0];
+            let type = '';
+            if (/정\s*례\s*회/.test(combinedText)) type = '(정례회)';
+            else if (/임\s*시\s*회/.test(combinedText)) type = '(임시회)';
+
+            let sessionClean = '';
+            if (sessionNum && sessionNum.length < 5) sessionClean = `제${sessionNum}회${type}`;
+            else sessionClean = type || '회의';
+
+            const isAudit = combinedText.includes('행정사무감사');
+            let titlePart = '';
+            if (isAudit) {
+                titlePart = yearPart ? `${yearPart} 행정사무감사` : '행정사무감사';
+            } else {
+                titlePart = sessionClean;
+                if (!sessMatch && combinedText) titlePart = combinedText.length > 20 ? combinedText.substring(0, 20) + '...' : combinedText;
+            }
+
+            if (isAudit) {
+                if (!matched.audit_coms) matched.audit_coms = [];
+                const slot = matched.audit_coms.find(ac => ac.title === titlePart);
+                if (slot) {
+                    if (!slot.content.includes(summary)) slot.content += (slot.content ? '\n' : '') + bodyContent;
+                } else {
+                    matched.audit_coms.push({ title: titlePart, content: bodyContent });
+                    addedAudit++;
+                }
+            } else {
+                if (!matched.standing_coms) matched.standing_coms = [];
+                const slot = matched.standing_coms.find(sc => sc.title === titlePart);
+                if (slot) {
+                    if (!slot.content.includes(summary)) slot.content += (slot.content ? '\n' : '') + bodyContent;
+                } else {
+                    matched.standing_coms.push({ title: titlePart, content: bodyContent });
+                    addedCommittee++;
+                }
+            }
+        });
+
+        saveToLocalStorage();
+
+        // 현재 열려있는 의원 카드 갱신
+        const currentId = document.getElementById('memberSelect').value;
+        if (currentId) applyMemberData(currentId);
+
+        let msg = `✅ TXT 업로드 완료! (${files.length}개 파일)\n- 상임위 활동: ${addedCommittee}건 추가\n- 행정감사 활동: ${addedAudit}건 추가`;
+        if (unmatched.size > 0) msg += `\n\n⚠️ 의원 명단에 없어 매칭 실패:\n${[...unmatched].join(', ')}`;
+        alert(msg);
+    }).catch(() => alert('파일을 읽는 중 오류가 발생했습니다.'));
+
+    e.target.value = '';
 }
 
 function renderDropdown() {
